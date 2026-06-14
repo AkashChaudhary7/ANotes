@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-serif: "Playfair Display", "Lora", Georgia, serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-indigo-650: #4338ca;
+  --color-indigo-605: #312e81;
+  --color-slate-650: #475569;
+}
+
+@layer base {
+  [contentEditable]:empty:before {
+    content: attr(placeholder);
+    color: #cbd5e1;
+    cursor: text;
+  }
+}
+
+/* Custom Print styles specifically for Premium A4 export layouts */
+@media print {
+  /* Set base size to standard A4 */
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Hide UI elements except print layout containers */
+  #anotes-app-root > div:not(#anotes-print-target),
+  #anotes-app-root > sidebar,
+  .print\:hidden,
+  button,
+  form,
+  select,
+  textarea {
+    display: none !important;
+  }
+  
+  #anotes-print-target {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  
+  .page-break-after-always {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
+
+/* Minimalist Dark Mode CSS Overrides */
+.dark {
+  background-color: #09090b !important;
+  color: #f4f4f5 !important;
+  color-scheme: dark;
+}
+
+/* Ensure the Editor wrapper and subcomponents adapt */
+.dark #anotes-app-root,
+.dark .bg-white,
+.dark .bg-white\/95,
+.dark .bg-slate-50 {
+  background-color: #09090b !important;
+  color: #e4e4e7 !important;
+}
+
+/* Borders should change from light gray to subtle charcoal */
+.dark .border-gray-100,
+.dark .border-gray-150,
+.dark .border-gray-200,
+.dark .border-gray-250,
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-gray-200\/50,
+.dark .border-gray-200\/80 {
+  border-color: #1e1e24 !important;
+}
+
+/* Headings in dark mode */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark .text-slate-900, .dark .text-gray-900 {
+  color: #ffffff !important;
+}
+
+/* Make tables look slick in minimalist dark mode */
+.dark table, .dark th, .dark td {
+  border-color: #27272a !important;
+  background-color: #09090b !important;
+  color: #f4f4f5 !important;
+}
+
+.dark th {
+  background-color: #18181b !important;
+}
+
+/* Change input backgrounds in popups */
+.dark input, .dark textarea, .dark select {
+  background-color: #0f0f11 !important;
+  border-color: #1e1e24 !important;
+  color: #f4f4f5 !important;
+}
+
+/* Slash Command & cell menu popups */
+.dark .shadow-xl, .dark .shadow-2xl {
+  background-color: #121214 !important;
+  border-color: #1e1e24 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark .hover\:bg-gray-50:hover, 
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-gray-100:hover {
+  background-color: #1c1c1e !important;
+  color: #ffffff !important;
+}
+
+/* Editor text controls */
+.dark .text-slate-700,
+.dark .text-slate-800,
+.dark .text-gray-700,
+.dark .text-gray-800,
+.dark .text-slate-650,
+.dark .text-slate-600 {
+  color: #d4d4d8 !important;
+}
+
+/* Subtitles / auxiliary text */
+.dark .text-slate-400,
+.dark .text-slate-500,
+.dark .text-gray-400,
+.dark .text-gray-555 {
+  color: #71717a !important;
+}
+
+/* Button colors */
+.dark .bg-slate-50\/40 {
+  background-color: #18181b !important;
+}
+
+/* Modal overlays */
+.dark .bg-black\/60 {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Mindmap, PDF exporter overlay cards */
+.dark .bg-slate-50, .dark .bg-slate-100 {
+  background-color: #0e0e11 !important;
+}
+
