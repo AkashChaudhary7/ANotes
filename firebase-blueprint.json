@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "Folder": {
+      "title": "Folder",
+      "description": "A notebook folder scoping multiple notes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "color": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "userId", "name", "createdAt"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "An interactive study note document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "folderId": { "type": "any" },
+        "title": { "type": "string" },
+        "coverEmoji": { "type": "string" },
+        "coverImage": { "type": "any" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" },
+        "isDeleted": { "type": "boolean" },
+        "deletedAt": { "type": "integer" },
+        "pinned": { "type": "boolean" },
+        "blocks": { "type": "array" },
+        "tags": { "type": "array" }
+      },
+      "required": ["id", "userId", "title", "coverEmoji", "createdAt", "updatedAt", "blocks"]
+    }
+  },
+  "firestore": {
+    "/folders/{folderId}": {
+      "schema": "Folder",
+      "description": "Folders owned by users"
+    },
+    "/notes/{noteId}": {
+      "schema": "Note",
+      "description": "Interactive study notes owned by users"
+    }
+  }
+}

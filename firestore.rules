@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default-deny gate
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+    
+    function isValidFolder(folder) {
+      return folder.id is string
+        && folder.id.size() <= 128
+        && folder.userId == request.auth.uid
+        && folder.name is string
+        && folder.name.size() <= 128
+        && folder.createdAt is int;
+    }
+    
+    function isValidNote(note) {
+      return note.id is string
+        && note.id.size() <= 128
+        && note.userId == request.auth.uid
+        && note.title is string
+        && note.title.size() <= 1000
+        && note.coverEmoji is string
+        && note.coverEmoji.size() <= 128
+        && note.createdAt is int
+        && note.updatedAt is int
+        && note.blocks is list
+        && note.blocks.size() <= 1000
+        && (note.folderId == null || (note.folderId is string && note.folderId.size() <= 128));
+    }
+
+    match /folders/{folderId} {
+      allow read, list: if isSignedIn() && existing().userId == request.auth.uid;
+      
+      allow create: if isSignedIn() 
+        && isValidId(folderId) 
+        && folderId == incoming().id
+        && isValidFolder(incoming())
+        && incoming().keys().hasAll(['id', 'userId', 'name', 'createdAt'])
+        && (incoming().keys().size() == 4 || (incoming().keys().size() == 5 && (incoming().color == null || incoming().color is string)));
+        
+      allow update: if isSignedIn()
+        && isValidId(folderId)
+        && existing().userId == request.auth.uid
+        && incoming().userId == request.auth.uid
+        && isValidFolder(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt;
+        
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    match /notes/{noteId} {
+      allow read, list: if isSignedIn() && existing().userId == request.auth.uid;
+      
+      allow create: if isSignedIn()
+        && isValidId(noteId)
+        && noteId == incoming().id
+        && isValidNote(incoming())
+        && (incoming().folderId == null || exists(/databases/$(database)/documents/folders/$(incoming().folderId)))
+        && (incoming().folderId == null || get(/databases/$(database)/documents/folders/$(incoming().folderId)).data.userId == request.auth.uid);
+        
+      allow update: if isSignedIn()
+        && isValidId(noteId)
+        && existing().userId == request.auth.uid
+        && incoming().userId == request.auth.uid
+        && isValidNote(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && (incoming().folderId == null || exists(/databases/$(database)/documents/folders/$(incoming().folderId)))
+        && (incoming().folderId == null || get(/databases/$(database)/documents/folders/$(incoming().folderId)).data.userId == request.auth.uid);
+        
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+  }
+}

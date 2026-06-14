@@ -1,0 +1,6 @@
+{
+  "name": "ANotes - Smart Notes & PDF Creator",
+  "description": "A refined, offline-first Notion-like document workspace supporting folder organizations, rich-block editing with slash commands, interactive formula rendering, and custom printable PDF themes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
