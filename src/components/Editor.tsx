@@ -43,7 +43,11 @@ import {
   MoreHorizontal,
   ClipboardList,
   BookOpen,
-  Edit
+  Edit,
+  Languages,
+  Network,
+  FileText,
+  PenTool
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ContentEditable } from './ContentEditable';
@@ -159,6 +163,14 @@ export default function Editor({
 
   // Markdown-compatible table modes (raw-markdown editor vs interactive table)
   const [editingMdTableBlockId, setEditingMdTableBlockId] = useState<string | null>(null);
+
+  // AI Premium Writing Assistant & Schematic Diagram feature states
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+  const [aiSelectedAction, setAiSelectedAction] = useState<'summarize' | 'enhance' | 'expand' | 'simplify' | 'translate_academic' | 'concept-diagram'>('summarize');
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [aiOutput, setAiOutput] = useState('');
+  const [aiErrorMsg, setAiErrorMsg] = useState('');
+  const [aiSelectedBlockId, setAiSelectedBlockId] = useState<string | null>(null);
 
   // Synchronization references to auto-save of note upon switching documents
   const lastStateRef = useRef<{ note: Note; isDirty: boolean }>({
@@ -630,6 +642,110 @@ export default function Editor({
     setActiveBlockMenu(null);
   };
 
+  const handleAiAction = async (overrideAction?: typeof aiSelectedAction, overrideBlockId?: string | null) => {
+    const targetAction = overrideAction || aiSelectedAction;
+    const targetBlockId = overrideBlockId !== undefined ? overrideBlockId : aiSelectedBlockId;
+    
+    let textToProcess = '';
+    
+    if (targetAction === 'summarize') {
+      textToProcess = note.blocks.map(b => b.content).filter(Boolean).join('\n');
+    } else {
+      if (targetBlockId) {
+        const blk = note.blocks.find(b => b.id === targetBlockId);
+        textToProcess = blk ? blk.content : '';
+      } else {
+        // use last edited / first non-empty block content
+        const firstWithContent = note.blocks.find(b => b.content.trim().length > 0);
+        textToProcess = firstWithContent ? firstWithContent.content : '';
+      }
+    }
+
+    if (!textToProcess.trim()) {
+      setAiStatus('error');
+      setAiErrorMsg('There is no content text to process. Please select a block with text or write something first.');
+      return;
+    }
+
+    setAiStatus('loading');
+    setAiErrorMsg('');
+    setAiOutput('');
+
+    try {
+      const response = await fetch('/api/ai/assist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: textToProcess,
+          action: targetAction,
+          contextNoteTitle: note.title
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'AI processing request failed');
+      }
+
+      setAiOutput(data.output);
+      setAiStatus('success');
+    } catch (err: any) {
+      console.error(err);
+      setAiStatus('error');
+      setAiErrorMsg(err?.message || 'Failed to communicate with Gemini API. Verify internet status or secret key configuration.');
+    }
+  };
+
+  const applyAiOutput = (insertMode: 'replace' | 'insert_below' | 'append_end') => {
+    if (!aiOutput) return;
+
+    if (insertMode === 'replace' && aiSelectedBlockId) {
+      const nextBlocks = note.blocks.map(b => {
+        if (b.id === aiSelectedBlockId) {
+          return { ...b, content: aiOutput };
+        }
+        return b;
+      });
+      onUpdateNote({
+        ...note,
+        blocks: nextBlocks,
+        updatedAt: Date.now()
+      });
+    } else if (insertMode === 'insert_below' && aiSelectedBlockId) {
+      const index = note.blocks.findIndex(b => b.id === aiSelectedBlockId);
+      if (index !== -1) {
+        const newBlock: Block = {
+          id: 'b-' + Math.random().toString(36).substr(2, 9),
+          type: 'paragraph',
+          content: aiOutput
+        };
+        const nextBlocks = [...note.blocks];
+        nextBlocks.splice(index + 1, 0, newBlock);
+        onUpdateNote({
+          ...note,
+          blocks: nextBlocks,
+          updatedAt: Date.now()
+        });
+      }
+    } else {
+      // Append End
+      const newBlock: Block = {
+        id: 'b-' + Math.random().toString(36).substr(2, 9),
+        type: 'paragraph',
+        content: aiOutput
+      };
+      onUpdateNote({
+        ...note,
+        blocks: [...note.blocks, newBlock],
+        updatedAt: Date.now()
+      });
+    }
+    // Close panel with success feedback
+    setIsAiPanelOpen(false);
+  };
+
   const moveBlock = (blockId: string, direction: 'up' | 'down') => {
     const index = note.blocks.findIndex(b => b.id === blockId);
     if (index === -1) return;
@@ -918,13 +1034,24 @@ export default function Editor({
       >
         {/* Hover drag/menu handles */}
         {!isReadMode && (
-          <div className="absolute left-3 top-2 flex items-center gap-1 opacity-0 group-hover/block:opacity-100 transition z-20">
+          <div className="absolute left-3 top-2 flex items-center gap-0.5 opacity-0 group-hover/block:opacity-100 transition z-20">
             <button
               onClick={() => addBlock('paragraph', block.id)}
               className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
               title="Add Block Below"
             >
               <Plus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                setAiSelectedBlockId(block.id);
+                setIsAiPanelOpen(true);
+                setAiStatus('idle');
+              }}
+              className="p-1 rounded text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+              title="Open Block in AI Assistant"
+            >
+              <Sparkles className="h-3.5 w-3.5 fill-indigo-50/50" />
             </button>
             <div className="relative">
               <button
@@ -1582,7 +1709,31 @@ export default function Editor({
                   </div>
                 );
               case 'paragraph':
-              default:
+              default: {
+                const isSvgDiagram = block.content.trim().startsWith('<svg');
+                if (isSvgDiagram) {
+                  return (
+                    <div className="my-5 p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col items-center justify-center relative group/diagram overflow-x-auto w-full select-none">
+                      <div className="absolute top-2.5 right-3 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-[9px] font-bold uppercase tracking-wider select-none border border-indigo-100/50 dark:border-indigo-900/30">
+                        ✨ AI Academic Diagram
+                      </div>
+                      <div 
+                        dangerouslySetInnerHTML={{ __html: block.content }} 
+                        className="w-full flex items-center justify-center py-2 min-h-[160px]"
+                      />
+                      {!isReadMode && (
+                        <div className="mt-2.5 opacity-0 group-hover/diagram:opacity-100 transition duration-150 flex items-center gap-2">
+                          <button
+                            onClick={() => deleteBlock(block.id)}
+                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/30 text-red-650 dark:text-red-400 rounded-lg text-xs font-semibold shadow-xs transition cursor-pointer"
+                          >
+                            Remove Vector
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
                 return (
                   <ContentEditable
                     id={`editable-${block.id}`}
@@ -1594,6 +1745,7 @@ export default function Editor({
                     html={block.content}
                   />
                 );
+              }
             }
           })()}
         </div>
@@ -1811,6 +1963,18 @@ export default function Editor({
                 <Sparkles className="h-4 w-4" />
               </button>
               <button
+                onClick={() => setIsAiPanelOpen(!isAiPanelOpen)}
+                className={`p-2 rounded-lg border transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 ${
+                  isAiPanelOpen
+                    ? 'bg-purple-50 border-purple-200 text-purple-700 font-semibold shadow-xs'
+                    : 'bg-indigo-50/50 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700'
+                }`}
+                title="AI Companion & Diagram Explainer"
+              >
+                <Sparkles className={`h-4 w-4 ${isAiPanelOpen ? 'text-purple-600 fill-purple-200 animate-pulse' : 'text-indigo-600'}`} />
+                <span className="text-xs font-sans font-semibold hidden md:inline">AI Assistant</span>
+              </button>
+              <button
                 onClick={onOpenPdfExporter}
                 className="p-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-md transition active:scale-95 cursor-pointer"
                 title="Export premium PDF"
@@ -1960,6 +2124,201 @@ export default function Editor({
       </div>
 
       </div>
+
+      {/* AI Note Companion Side Panel overlay / drawer */}
+      {isAiPanelOpen && (
+        <div className="w-80 sm:w-96 border-l border-indigo-150 p-5 shrink-0 h-full flex flex-col bg-indigo-50/30 dark:bg-slate-900 shadow-xl relative z-30 select-none animate-slide-in">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-indigo-100 dark:border-indigo-950/40 mb-4 shrink-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400 fill-indigo-100 dark:fill-indigo-950/30 animate-pulse" />
+              <span className="font-bold text-slate-800 dark:text-slate-200 text-sm font-sans tracking-tight">AI Note Companion</span>
+            </div>
+            <button
+              onClick={() => setIsAiPanelOpen(false)}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              title="Close AI Companion"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin select-text">
+            {/* Context/Select block panel */}
+            <div className="p-3 bg-white dark:bg-slate-950 border border-indigo-50 dark:border-indigo-950/30 rounded-xl space-y-1.5 shadow-2xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Target context block</span>
+              {aiSelectedBlockId ? (
+                (() => {
+                  const focusedBlock = note.blocks.find(b => b.id === aiSelectedBlockId);
+                  return (
+                    <div className="flex flex-col gap-1.5 select-text">
+                      <div className="flex items-center justify-between select-none">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-400 uppercase text-[9px]">
+                          Block: {focusedBlock?.type || 'Paragraph'}
+                        </span>
+                        <button
+                          onClick={() => setAiSelectedBlockId(null)}
+                          className="text-[10px] text-indigo-500 hover:text-indigo-700 font-medium font-sans cursor-pointer"
+                        >
+                          Send whole note
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 italic line-clamp-3 bg-slate-50 dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                        {focusedBlock?.content ? focusedBlock.content.replace(/<[^>]*>/g, '') : '(Empty block content)'}
+                      </p>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between select-none">
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 uppercase text-[9px]">
+                      Entire Document
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 bg-purple-50/20 dark:bg-purple-950/10 p-2.5 rounded-lg border border-purple-50/50 dark:border-purple-950/20 leading-relaxed font-sans">
+                    Gemini AI will analyze and synthesize the entire note scope for generating takeaways, definitions, and study concepts.
+                  </p>
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase mt-1 select-none">Or select specific note block:</label>
+                  <select
+                    value={aiSelectedBlockId || ''}
+                    onChange={(e) => setAiSelectedBlockId(e.target.value || null)}
+                    className="w-full text-xs p-2 border border-gray-250 dark:border-slate-800 rounded-lg outline-none cursor-pointer focus:border-indigo-400 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-350 select-text"
+                  >
+                    <option value="">-- Apply to whole note --</option>
+                    {note.blocks.map((b, bIdx) => {
+                      const plainText = b.content.replace(/<[^>]*>/g, '').trim();
+                      if (!plainText) return null;
+                      return (
+                        <option key={b.id} value={b.id}>
+                          #{bIdx + 1} ({b.type}): {plainText.substring(0, 30)}...
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* AI Action Picker */}
+            <div className="space-y-2 select-none">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Select AI brain action</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { id: 'summarize', label: 'Summarize Keypoints', icon: FileText, desc: 'Generates modern bulleted executive summaries and definitions.' },
+                  { id: 'enhance', label: 'Elite Polish', icon: PenTool, desc: 'Elevates grammar, style, vocabulary flow and clarity.' },
+                  { id: 'simplify', label: 'Explain / Analogy', icon: HelpCircle, desc: 'Explains dense concepts with illustrative real life analogies.' },
+                  { id: 'translate_academic', label: 'Hindi / Sanskrit', icon: Languages, desc: 'Translates to academic Hindi and classical Sanskrit root guides.' },
+                  { id: 'expand', label: 'Deep Expand', icon: Plus, desc: 'Synthesizes context and elaborates next coherent paragraphs.' },
+                  { id: 'concept-diagram', label: 'Schema Diagram', icon: Network, desc: 'Generates gorgeous interactive vector SVG study diagrams.' },
+                ].map((act) => {
+                  const Icon = act.icon;
+                  const isSelt = aiSelectedAction === act.id;
+                  return (
+                    <button
+                      key={act.id}
+                      onClick={() => setAiSelectedAction(act.id as any)}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer select-none ${
+                        isSelt
+                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold shadow-2xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-350 hover:bg-slate-50'
+                      }`}
+                      title={act.desc}
+                    >
+                      <Icon className={`h-4.5 w-4.5 mb-1.5 ${isSelt ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+                      <div className="text-[11px] leading-tight font-semibold font-sans">{act.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Run Button */}
+            <button
+              onClick={() => handleAiAction()}
+              disabled={aiStatus === 'loading'}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-sans text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 select-none shadow-xs"
+            >
+              {aiStatus === 'loading' ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Thinking...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5 fill-white/20" />
+                  <span>Execute AI Assistant</span>
+                </>
+              )}
+            </button>
+
+            {/* AI Console Display output */}
+            {aiStatus !== 'idle' && (
+              <div className="p-3.5 bg-slate-950 text-slate-100 rounded-xl space-y-3.5 border border-slate-850 shadow-inner select-text">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 block border-b border-slate-900 pb-1.5 font-mono select-none">
+                  Gemini Study System Output
+                </span>
+
+                {aiStatus === 'loading' && (
+                  <div className="py-10 flex flex-col items-center justify-center gap-2 select-none">
+                    <span className="p-2.5 rounded-full bg-slate-900 border border-slate-800 animate-pulse">
+                      <Sparkles className="h-5 w-5 text-indigo-400 animate-bounce" />
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 animate-pulse">Analyzing note structure tokens...</span>
+                  </div>
+                )}
+
+                {aiStatus === 'error' && (
+                  <div className="p-2.5 rounded-lg bg-red-950/40 border border-red-900/40 text-red-300 text-xs text-left leading-relaxed">
+                    {aiErrorMsg}
+                  </div>
+                )}
+
+                {aiStatus === 'success' && aiOutput && (
+                  <div className="space-y-3 select-text">
+                    <div className="text-xs font-sans text-slate-200 leading-relaxed max-h-72 overflow-y-auto pr-1 scrollbar-thin select-text">
+                      {aiSelectedAction === 'concept-diagram' ? (
+                        <div className="bg-white rounded-xl p-3 flex flex-col items-center justify-center min-h-[160px] overflow-hidden select-none border border-slate-100">
+                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Interactive vector schematic pre-visual</span>
+                          <div dangerouslySetInnerHTML={{ __html: aiOutput }} className="w-full flex items-center justify-center scale-95" />
+                        </div>
+                      ) : (
+                        <div dangerouslySetInnerHTML={{ __html: aiOutput }} className="prose prose-xs prose-invert" />
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 border-t border-slate-900 pt-3 select-none">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Integrate output into note:</span>
+                      <div className="grid grid-cols-2 gap-1.5 select-none">
+                        {aiSelectedBlockId && aiSelectedAction !== 'concept-diagram' && (
+                          <button
+                            onClick={() => applyAiOutput('replace')}
+                            className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold transition font-sans cursor-pointer flex items-center justify-center shadow-xs"
+                          >
+                            Replace Content
+                          </button>
+                        )}
+                        <button
+                          onClick={() => applyAiOutput('insert_below')}
+                          className="p-2 bg-slate-800 hover:bg-slate-705 text-white rounded-lg text-[10px] font-bold transition font-sans cursor-pointer flex items-center justify-center shadow-xs"
+                        >
+                          Insert Under Block
+                        </button>
+                        <button
+                          onClick={() => applyAiOutput('append_end')}
+                          className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold transition font-sans col-span-2 cursor-pointer flex items-center justify-center shadow-xs"
+                        >
+                          Append to End of Note
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* TableOfContents Right Panel Sidebar */}
       <div className="w-72 border-l border-gray-100 p-6 shrink-0 h-full hidden xl:flex flex-col bg-slate-50/25 sticky top-0 overflow-y-auto scrollbar-none">
