@@ -4,9 +4,10 @@ import Editor from './components/Editor';
 import PDFExporter from './components/PDFExporter';
 import MindMapRenderer from './components/MindMapRenderer';
 import QuizWorkspace from './components/QuizWorkspace';
+import DiagnosticPanel, { DiagnosticLog } from './components/DiagnosticPanel';
 import { Folder, Note } from './types';
 import { getFolders, getNotes, saveFolder, deleteFolder, saveNote, deleteNote, seedInitialDataIfNeeded } from './utils/db';
-import { Sparkles, Info, Menu, Plus } from 'lucide-react';
+import { Sparkles, Info, Menu, Plus, HelpCircle } from 'lucide-react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   auth,
@@ -19,6 +20,7 @@ import {
   deleteFolderFromFirestore,
   deleteNoteFromFirestore
 } from './utils/firebase';
+import firebaseConfig from '../firebase-applet-config.json';
 
 export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -40,6 +42,29 @@ export default function App() {
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showMindModal, setShowMindModal] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Diagnostics logging panel states
+  const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
+  const [diagnosticLogs, setDiagnosticLogs] = useState<DiagnosticLog[]>([]);
+
+  const addDiagnosticLog = (type: 'info' | 'success' | 'warning' | 'error', message: string, code?: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const newLog: DiagnosticLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp,
+      type,
+      message,
+      code
+    };
+    setDiagnosticLogs(prev => {
+      const logs = [...prev, newLog];
+      if (logs.length > 100) {
+        return logs.slice(logs.length - 100);
+      }
+      return logs;
+    });
+  };
 
   // PWA Install Prompt reference
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -66,6 +91,37 @@ export default function App() {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Bootstrap diagnostic environment checks
+  useEffect(() => {
+    addDiagnosticLog('info', 'Sandbox context starting up cleanly...');
+    
+    // Iframe detector
+    if (window.self !== window.top) {
+      addDiagnosticLog('warning', 'Modern security restriction: Application is loaded inside an iframe (sandbox). Third-party cookies and popup message headers might be blocked by browsers.');
+    } else {
+      addDiagnosticLog('success', 'Standalone execution: Application is running outside of local sandboxing. Auth handshakes should proceed smoothly.');
+    }
+
+    if (window.isSecureContext) {
+      addDiagnosticLog('success', 'Platform environment context is secure (HTTPS or localhost).');
+    } else {
+      addDiagnosticLog('warning', 'Platform environment warning: Secure context check failed. Some browser auth parameters may deny authorization.');
+    }
+
+    if (typeof window.indexedDB !== 'undefined') {
+      addDiagnosticLog('success', 'Persistent client layer is healthy and running: IndexedDB configured.');
+    } else {
+      addDiagnosticLog('error', 'Execution error: IndexedDB support is unavailable on this browser.');
+    }
+
+    // Verify Firebase credentials block
+    try {
+      addDiagnosticLog('info', `Firebase authentication system initialized with project ID: ${firebaseConfig.projectId || 'N/A'}`);
+    } catch {
+      addDiagnosticLog('error', 'Firebase load exception: Failed to read backend JSON properties configuration.');
+    }
   }, []);
 
   // Initial load and seeding
@@ -103,6 +159,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
+        addDiagnosticLog('success', `Auth session active: User signed in successfully. Email: ${firebaseUser.email}, UID: ${firebaseUser.uid}`);
         setIsSyncing(true);
         try {
           // Fetch Cloud Firestore states
@@ -110,6 +167,7 @@ export default function App() {
           const cloudNotes = await getNotesFromFirestore(firebaseUser.uid);
 
           if (cloudFolders.length === 0 && cloudNotes.length === 0) {
+            addDiagnosticLog('info', 'Cloud Sync: No remote documents found. Initializing remote database with local items...');
             // First time pairing: sync current local items to Firestore
             const localFolders = await getFolders();
             const localNotes = await getNotes();
@@ -119,7 +177,9 @@ export default function App() {
             for (const n of localNotes) {
               await saveNoteToFirestore(n, firebaseUser.uid);
             }
+            addDiagnosticLog('success', 'Cloud Sync: Remote database successfully pre-seeded with local records!');
           } else {
+            addDiagnosticLog('info', `Cloud Sync: Syncing ${cloudFolders.length} folders and ${cloudNotes.length} notes down to local cache...`);
             // Synchronize from Cloud Firestore down to IndexedDB cache
             for (const f of cloudFolders) {
               await saveFolder(f);
@@ -152,13 +212,16 @@ export default function App() {
                 setActiveNoteId(activeOnes.length > 0 ? activeOnes[0].id : cloudNotes[0].id);
               }
             }
+            addDiagnosticLog('success', 'Cloud Sync: Local Cache successfully synchronized with remote Firestore!');
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error('Error synchronizing with Firestore database:', err);
+          addDiagnosticLog('error', `Cloud Sync Exception: ${err?.message || String(err)}`);
         } finally {
           setIsSyncing(false);
         }
       } else {
+        addDiagnosticLog('info', 'Auth session inactive: Operating in localized offline-only mode.');
         // Logged-out state: fallback down to IndexedDB
         const localFolders = await getFolders();
         const localNotes = await getNotes();
@@ -352,18 +415,26 @@ export default function App() {
 
   // Google Sign-In Actions
   const handleLogin = async () => {
+    setLoginError(null);
+    addDiagnosticLog('info', 'Auth action: User requested Google Sign-in flow. Constructing popup state...');
     try {
-      await loginWithGoogle();
-    } catch (e) {
+      const loggedUser = await loginWithGoogle();
+      addDiagnosticLog('success', `Auth action success: User logged in. Profile name: ${loggedUser.displayName || 'Authorized User'}`);
+    } catch (e: any) {
       console.error('Google authorization error:', e);
+      setLoginError(e?.message || String(e));
+      addDiagnosticLog('error', `Google Login handshakes failed. Code reason: ${e?.message || String(e)}`, e?.code);
     }
   };
 
   const handleLogout = async () => {
+    addDiagnosticLog('info', 'Auth action: Terminating user session flow...');
     try {
       await logoutUser();
-    } catch (e) {
+      addDiagnosticLog('success', 'Auth action success: Local authorization session cleared successfully.');
+    } catch (e: any) {
       console.error('Logout error:', e);
+      addDiagnosticLog('error', `Logout termination failed: ${e?.message || String(e)}`, e?.code);
     }
   };
 
@@ -427,6 +498,7 @@ export default function App() {
             setIsSidebarOpen(false);
           }
         }}
+        onOpenDiagnostics={() => setShowDiagnosticPanel(true)}
       />
 
       {/* Primary Workspace container */}
@@ -514,6 +586,53 @@ export default function App() {
           onClose={() => setShowMindModal(false)}
         />
       )}
+
+      {/* GOOGLE SIGN-IN INTERACTIVE TROUBLESHOOTING GUIDE */}
+      {loginError && (
+        <div className={`fixed bottom-6 right-6 left-6 md:left-auto md:w-[420px] rounded-2xl shadow-2xl p-5 z-50 text-xs leading-relaxed font-sans space-y-3 animate-fade-in border ${
+          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-rose-200 text-slate-800'
+        }`}>
+          <div className="flex items-start justify-between">
+            <div className={`flex items-center gap-2 font-bold select-none text-sm ${isDark ? 'text-rose-400' : 'text-rose-600'}`}>
+              <Info className="h-4 w-4 animate-pulse" />
+              <span>Google Sign-In Alert</span>
+            </div>
+            <button
+              onClick={() => setLoginError(null)}
+              className={`p-1.5 rounded transition cursor-pointer select-none text-[10px] font-bold uppercase tracking-wider ${
+                isDark ? 'hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-650'
+              }`}
+            >
+              Dismiss
+            </button>
+          </div>
+          <p>
+            The sign-in popup was blocked or failed to communicate. Because this preview runs inside a secure sandbox **iframe**, modern browsers (like Safari, Brave, or Chrome incognito mode) restrict third-party authentication popups from communicating back by default.
+          </p>
+          <div className={`rounded-xl p-3 border space-y-1.5 font-mono text-[10px] ${
+            isDark ? 'bg-zinc-950/60 border-zinc-850 text-zinc-400' : 'bg-rose-50/50 border-rose-100/50 text-slate-600'
+          }`}>
+            <p className={`font-bold uppercase text-[9px] tracking-wider ${isDark ? 'text-zinc-300' : 'text-rose-700'}`}>Recommended Actions:</p>
+            <p>• Click the "Open in new tab" arrow icon in the outer top-right of your preview header to launch the application outside the frame.</p>
+            <p>• Ensure third-party cookies & redirects are allowed, or verify that your Google API Authorized domains include this preview host.</p>
+          </div>
+          <button
+            onClick={() => setShowDiagnosticPanel(true)}
+            className="w-full mt-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/20 rounded-lg py-1.5 transition uppercase tracking-wider"
+          >
+            Check Security & Auth Diagnostics
+          </button>
+        </div>
+      )}
+
+      {/* DETAILED DIAGNOSTICS & SYSTEM EVENT CHRONOLOGY PANEL */}
+      <DiagnosticPanel
+        isOpen={showDiagnosticPanel}
+        onClose={() => setShowDiagnosticPanel(false)}
+        logs={diagnosticLogs}
+        onClearLogs={() => setDiagnosticLogs([])}
+        isDark={isDark}
+      />
     </div>
   );
 }
