@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="premium-gradient-large" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow-large" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="4" dy="8" stdDeviation="10" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  
+  <!-- Smooth high-res rounded square background -->
+  <rect width="480" height="480" x="16" y="16" rx="112" fill="url(#premium-gradient-large)" />
+  
+  <!-- Large beautiful paper mockup sheet -->
+  <g filter="url(#shadow-large)">
+    <!-- Premium white sheet -->
+    <rect x="138" y="118" width="236" height="276" rx="36" fill="#ffffff" />
+    
+    <!-- Title strip -->
+    <rect x="186" y="176" width="96" height="16" rx="8" fill="#e2e8f0" />
+    
+    <!-- Note guidelines -->
+    <rect x="186" y="214" width="138" height="16" rx="8" fill="#818cf8" />
+    <rect x="186" y="252" width="124" height="16" rx="8" fill="#cbd5e1" />
+    <rect x="186" y="290" width="80" height="16" rx="8" fill="#cbd5e1" />
+    
+    <!-- Small premium dots/checkboxes -->
+    <rect x="154" y="214" width="16" height="16" rx="4" fill="#4f46e5" />
+    <rect x="154" y="252" width="16" height="16" rx="4" fill="#cbd5e1" />
+    <rect x="154" y="290" width="16" height="16" rx="4" fill="#cbd5e1" />
+  </g>
+
+  <!-- Giant floating AI star -->
+  <path d="M364 74 L380 111 L417 127 L380 143 L364 180 L348 143 L311 127 L348 111 Z" fill="#facc15" filter="url(#shadow-large)" />
+  <!-- Additional smaller sparkle -->
+  <path d="M407 170 L415 188 L433 196 L415 204 L407 222 L399 204 L381 196 L399 188 Z" fill="#60a5fa" />
+</svg>

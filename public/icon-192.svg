@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="premium-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Smooth rounded square background -->
+  <rect width="180" height="180" x="6" y="6" rx="42" fill="url(#premium-gradient)" />
+  
+  <!-- Subtle inner layout design pattern -->
+  <g filter="url(#shadow)">
+    <!-- Main document body element -->
+    <rect x="52" y="44" width="88" height="104" rx="14" fill="#ffffff" />
+    
+    <!-- Aesthetic checklist lines inside document -->
+    <rect x="70" y="66" width="36" height="6" rx="3" fill="#e2e8f0" />
+    <rect x="70" y="80" width="52" height="6" rx="3" fill="#818cf8" />
+    <rect x="70" y="94" width="46" height="6" rx="3" fill="#cbd5e1" />
+    <rect x="70" y="108" width="30" height="6" rx="3" fill="#cbd5e1" />
+    
+    <!-- Checklist small checkboxes -->
+    <rect x="58" y="80" width="6" height="6" rx="1.5" fill="#4f46e5" />
+    <rect x="58" y="94" width="6" height="6" rx="1.5" fill="#e2e8f0" />
+    <rect x="58" y="108" width="6" height="6" rx="1.5" fill="#e2e8f0" />
+  </g>
+
+  <!-- Sparkle floating AI accent (indicates Smart features) -->
+  <path d="M136 28 L142 42 L156 48 L142 54 L136 68 L130 54 L116 48 L130 42 Z" fill="#facc15" filter="url(#shadow)" />
+  <path d="M152 64 L155 71 L162 74 L155 77 L152 84 L149 77 L142 74 L149 71 Z" fill="#60a5fa" />
+</svg>
