@@ -17,6 +17,56 @@ import {
   Compass
 } from 'lucide-react';
 
+interface ParsedMarkdownTable {
+  headers: string[];
+  rows: string[][];
+  alignments: ('left' | 'center' | 'right')[];
+}
+
+const parseMarkdownTable = (markdown: string): ParsedMarkdownTable | null => {
+  if (!markdown) return null;
+  const lines = markdown.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length === 0) return null;
+
+  const tableLines = lines.filter(l => l.startsWith('|') && l.endsWith('|'));
+  if (tableLines.length < 2) return null;
+
+  const parseRow = (line: string): string[] => {
+    const parts = line.split('|');
+    if (parts.length > 1) {
+      parts.shift();
+      parts.pop();
+    }
+    return parts.map(p => p.trim());
+  };
+
+  const headers = parseRow(tableLines[0]);
+  if (headers.length === 0) return null;
+
+  const delimiterRow = parseRow(tableLines[1]);
+  const isDelimiter = delimiterRow.length > 0 && delimiterRow.every(col => /^[:-]+$/.test(col));
+  if (!isDelimiter) return null;
+
+  const alignments = delimiterRow.map(col => {
+    const left = col.startsWith(':');
+    const right = col.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    return 'left';
+  });
+
+  const rows: string[][] = [];
+  for (let i = 2; i < tableLines.length; i++) {
+    const row = parseRow(tableLines[i]);
+    while (row.length < headers.length) {
+      row.push('');
+    }
+    rows.push(row.slice(0, headers.length));
+  }
+
+  return { headers, rows, alignments };
+};
+
 interface PDFExporterProps {
   note: Note;
   onClose: () => void;
@@ -47,8 +97,42 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
       level: b.type === 'heading-1' ? 1 : 2,
     }));
 
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [isRendering, setIsRendering] = useState(true);
+
+  useEffect(() => {
+    // Show a high-quality layout compile simulation whenever options/theme change
+    setIsRendering(true);
+    const timer = setTimeout(() => {
+      setIsRendering(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [options.theme, options.includeCover, options.autoTOC, options.pageNumbers, options.watermarkEnabled, options.sectionAutoNumber]);
+
   const handlePrint = () => {
-    window.print();
+    if (isPreparing) return;
+    setIsPreparing(true);
+
+    const triggerPrint = () => {
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => {
+          setIsPreparing(false);
+        }, 800);
+      }, 150);
+    };
+
+    if (document.fonts && typeof document.fonts.ready !== 'undefined') {
+      document.fonts.ready
+        .then(() => {
+          triggerPrint();
+        })
+        .catch(() => {
+          triggerPrint();
+        });
+    } else {
+      triggerPrint();
+    }
   };
 
   // Theme settings mapping for inline configuration
@@ -97,7 +181,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
   const themeStyle = getThemeStyles(options.theme);
 
   return (
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-end z-50 select-text">
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-end z-50 select-text anotes-pdf-modal">
       {/* Exporter sidebar side panel */}
       <div className="w-[450px] h-full bg-white border-l border-slate-200 flex flex-col shadow-2xl z-20">
         {/* Header */}
@@ -328,10 +412,17 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
         <div className="p-5 border-t border-gray-100 bg-slate-50 select-none pb-8">
           <button
             onClick={handlePrint}
-            className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl py-3 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer"
+            disabled={isPreparing || isRendering}
+            className={`w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-xl py-3 font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition active:scale-95 cursor-pointer ${
+              (isPreparing || isRendering) ? 'opacity-75 cursor-not-allowed' : ''
+            }`}
           >
-            <Printer className="h-4 w-4" />
-            Download / Save Premium PDF
+            <Printer className={`h-4 w-4 ${(isPreparing || isRendering) ? 'animate-spin' : ''}`} />
+            {isPreparing 
+              ? 'Preparing Documents...' 
+              : isRendering 
+                ? 'Pre-rendering Premium Layout...' 
+                : 'Download / Save Premium PDF'}
           </button>
           <p className="text-[10px] text-slate-400 text-center mt-2.5 leading-relaxed font-mono">
             Requires Google Chrome or Safari. Set Destination to "Save as PDF" and toggle on background graphics in the printable preferences popup for custom margins.
@@ -340,7 +431,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
       </div>
 
       {/* Main Preview Page Template */}
-      <div className="flex-1 h-full bg-slate-800 p-10 overflow-y-auto flex justify-center print:bg-white print:p-0 select-text">
+      <div className="flex-1 h-full bg-slate-800 p-10 overflow-y-auto flex justify-center print:bg-white print:p-0 select-text relative">
         <div
           id="anotes-print-target"
           className="w-[794px] min-h-[1123px] bg-white shadow-2xl p-16 relative overflow-hidden select-text flex flex-col font-serif print:shadow-none print:w-full print:p-8"
@@ -349,6 +440,16 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
             borderColor: themeStyle.borderColor
           }}
         >
+          {/* Pre-rendering loading spinner overlay */}
+          {isRendering && (
+            <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center gap-4 z-40 select-none print:hidden">
+              <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="text-center space-y-1.5">
+                <p className="font-sans font-bold text-xs tracking-wider text-slate-800 uppercase">Compiling Theme Typography...</p>
+                <p className="text-[9px] text-slate-450 font-mono">Format template: {themeStyle.name}</p>
+              </div>
+            </div>
+          )}
           {/* Print specific Watermark container */}
           {options.watermarkEnabled && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden z-0">
@@ -424,7 +525,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
               switch (block.type) {
                 case 'heading-1':
                   return (
-                    <div className="pt-6 pb-2 pb-1 border-b-2" style={{ borderColor: themeStyle.primaryColor }}>
+                    <div key={block.id || idx} className="pt-6 pb-2 pb-1 border-b-2" style={{ borderColor: themeStyle.primaryColor }}>
                       <h2 className="text-3xl font-bold font-serif" style={{ color: themeStyle.primaryColor }}>
                         {options.sectionAutoNumber ? `CHAPTER ${h1CountBefore + 1}: ` : ''}
                         {block.content.replace(/<[^>]*>/g, '')}
@@ -433,69 +534,104 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
                   );
                 case 'heading-2':
                   return (
-                    <h3 className="text-xl font-bold font-serif text-slate-800 pt-4" style={{ color: themeStyle.primaryColor }}>
+                    <h3 key={block.id || idx} className="text-xl font-bold font-serif text-slate-800 pt-4" style={{ color: themeStyle.primaryColor }}>
                       {block.content.replace(/<[^>]*>/g, '')}
                     </h3>
                   );
                 case 'heading-3':
                   return (
-                    <h4 className="text-lg font-bold font-serif text-slate-700 pt-3">
+                    <h4 key={block.id || idx} className="text-lg font-bold font-serif text-slate-700 pt-3">
                       {block.content.replace(/<[^>]*>/g, '')}
                     </h4>
                   );
                 case 'heading-4':
                   return (
-                    <h5 className="text-base font-bold font-serif text-slate-700 pt-2">
+                    <h5 key={block.id || idx} className="text-base font-bold font-serif text-slate-700 pt-2">
                       {block.content.replace(/<[^>]*>/g, '')}
                     </h5>
                   );
                 case 'bullet-list-item':
                   return (
-                    <div className="flex items-start gap-2 text-sm leading-relaxed text-slate-800 pl-4">
+                    <div key={block.id || idx} className="flex items-start gap-2 text-sm leading-relaxed text-slate-800 pl-4">
                       <span>•</span>
                       <span dangerouslySetInnerHTML={{ __html: block.content }} />
                     </div>
                   );
                 case 'numbered-list-item':
                   return (
-                    <div className="flex items-start gap-2 text-sm leading-relaxed text-slate-800 pl-4">
+                    <div key={block.id || idx} className="flex items-start gap-2 text-sm leading-relaxed text-slate-800 pl-4">
                       <span>{(note.blocks.slice(0, idx).filter(b => b.type === 'numbered-list-item').length + 1)}.</span>
                       <span dangerouslySetInnerHTML={{ __html: block.content }} />
                     </div>
                   );
                 case 'checklist-item':
                   return (
-                    <div className="flex items-start gap-2 text-sm leading-relaxed text-slate-800 pl-4">
+                    <div key={block.id || idx} className="flex items-start gap-2 text-sm leading-relaxed text-slate-800 pl-4">
                       <span className="font-mono">{block.checked ? '[🗸]' : '[ ]'}</span>
                       <span className={block.checked ? 'line-through text-slate-400' : ''} dangerouslySetInnerHTML={{ __html: block.content }} />
                     </div>
                   );
                 case 'quote':
                   return (
-                    <div className="pl-4 border-l-4 italic my-4 py-1 text-slate-600 bg-slate-50 rounded-r" style={{ borderLeftColor: themeStyle.borderColor }}>
+                    <div key={block.id || idx} className="pl-4 border-l-4 italic my-4 py-1 text-slate-600 bg-slate-50 rounded-r" style={{ borderLeftColor: themeStyle.borderColor }}>
                       <p className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: block.content }} />
                     </div>
                   );
                 case 'callout':
                   return (
-                    <div className="flex items-start gap-3 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 my-4 text-slate-800 text-xs">
+                    <div key={block.id || idx} className="flex items-start gap-3 p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 my-4 text-slate-800 text-xs">
                       <span className="text-base select-none mt-0.5">💡</span>
                       <p className="leading-relaxed font-sans" dangerouslySetInnerHTML={{ __html: block.content }} />
                     </div>
                   );
                 case 'divider':
                   return (
-                    <div className="my-6 border-t border-slate-250" />
+                    <div key={block.id || idx} className="my-6 border-t border-slate-250" />
                   );
                 case 'table':
                   return (
-                    <div className="my-4 overflow-x-auto border rounded-xl bg-white p-3 select-text">
+                    <div key={block.id || idx} className="my-4 overflow-x-auto border rounded-xl bg-white p-3 select-text">
                       <table className="min-w-full border-collapse text-[11px] text-left text-gray-700">
                         <tbody>
                           {block.tableData?.map((row, rIdx) => (
                             <tr key={rIdx} className={rIdx === 0 ? 'bg-slate-50 border-b font-semibold text-slate-900' : 'border-b border-slate-100'}>
                               {row.map((cell, cIdx) => (
                                 <td key={cIdx} className="p-1.5 border border-slate-200">
+                                  {cell}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                case 'markdown-table':
+                  const parsed = parseMarkdownTable(block.content || '');
+                  if (!parsed) {
+                    return (
+                      <div key={block.id || idx} className="my-4 p-3 bg-rose-50 text-rose-700 text-xs rounded border border-rose-200 font-sans">
+                        Invalid Markdown Table Formatting
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={block.id || idx} className="my-4 overflow-x-auto border border-slate-200 rounded-xl bg-white p-3 select-text">
+                      <table className="min-w-full border-collapse text-[11px] text-left text-slate-700">
+                        <thead>
+                          <tr className="bg-slate-50 border-b font-semibold text-slate-900 border-slate-250">
+                            {parsed.headers.map((h, i) => (
+                              <th key={i} className="p-1.5 border border-slate-200 font-bold bg-slate-50" style={{ textAlign: parsed.alignments[i] || 'left' }}>
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parsed.rows.map((row, rIdx) => (
+                            <tr key={rIdx} className="border-b border-slate-100">
+                              {row.map((cell, cIdx) => (
+                                <td key={cIdx} className="p-1.5 border border-slate-200" style={{ textAlign: parsed.alignments[cIdx] || 'left' }}>
                                   {cell}
                                 </td>
                               ))}
@@ -512,7 +648,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
                   let highlightStyle = 'bg-blue-50 border-blue-200 text-blue-900 border-l-4';
                   let symbolIcon = '⭐';
                   let badgeText = 'Important';
-
+ 
                   if (isVImp) {
                     highlightStyle = 'bg-rose-50 border-rose-250 text-rose-900 border-l-4';
                     symbolIcon = '🔴';
@@ -522,9 +658,9 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
                     symbolIcon = '🔥';
                     badgeText = 'Exam Point';
                   }
-
+ 
                   return (
-                    <div className={`p-3 rounded border font-sans ${highlightStyle} my-4`}>
+                    <div key={block.id || idx} className={`p-3 rounded border font-sans ${highlightStyle} my-4`}>
                       <span className="text-[10px] font-bold uppercase tracking-wider block mb-1">
                         {symbolIcon} {badgeText}
                       </span>
@@ -533,14 +669,14 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
                   );
                 case 'code':
                   return (
-                    <div className="bg-slate-950 font-mono text-cyan-400 p-4 rounded-lg my-4 text-xs whitespace-pre-wrap tracking-tight leading-relaxed select-text">
+                    <div key={block.id || idx} className="bg-slate-950 font-mono text-cyan-400 p-4 rounded-lg my-4 text-xs whitespace-pre-wrap tracking-tight leading-relaxed select-text">
                       <p className="text-[9px] text-slate-500 border-b border-slate-900 pb-1 mb-2">Code: {block.codeLanguage || 'js'}</p>
                       {block.content || '// No code written'}
                     </div>
                   );
                 case 'formula':
                   return (
-                    <div className="bg-slate-50 p-4 rounded-xl flex flex-col items-center justify-center my-4 font-serif text-slate-900 select-all border shadow-xs">
+                    <div key={block.id || idx} className="bg-slate-50 p-4 rounded-xl flex flex-col items-center justify-center my-4 font-serif text-slate-900 select-all border shadow-xs">
                       <div className="italic text-lg tracking-wider font-serif font-bold text-center">
                         {block.formulaTex || 'PV = nRT'}
                       </div>
@@ -550,7 +686,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
                 case 'paragraph':
                 default:
                   return (
-                    <p className="text-sm leading-relaxed text-slate-800" dangerouslySetInnerHTML={{ __html: block.content }} />
+                    <p key={block.id || idx} className="text-sm leading-relaxed text-slate-800" dangerouslySetInnerHTML={{ __html: block.content }} />
                   );
               }
             })}
