@@ -53,6 +53,7 @@ interface SidebarProps {
   onLogout: () => void;
   isQuizActive: boolean;
   onOpenQuizZone: () => void;
+  onOpenDiagnostics?: () => void;
 }
 
 export default function Sidebar({
@@ -81,7 +82,8 @@ export default function Sidebar({
   onLogin,
   onLogout,
   isQuizActive,
-  onOpenQuizZone
+  onOpenQuizZone,
+  onOpenDiagnostics
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
@@ -231,12 +233,21 @@ export default function Sidebar({
                   <Cloud className="h-3 w-3" />
                   <span>Cloud Synced</span>
                 </span>
-                <button 
-                  onClick={onLogout}
-                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition text-[9px] select-none cursor-pointer underline"
-                >
-                  Sign Out
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={onOpenDiagnostics}
+                    className="text-indigo-400 hover:text-indigo-300 hover:underline transition text-[9px] select-none cursor-pointer"
+                  >
+                    Logs
+                  </button>
+                  <span className="text-zinc-700 dark:text-zinc-800">|</span>
+                  <button 
+                    onClick={onLogout}
+                    className="text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200 transition text-[9px] select-none cursor-pointer underline"
+                  >
+                    Sign Out
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -258,6 +269,16 @@ export default function Sidebar({
               >
                 <span>Google Account</span>
               </button>
+              <div className="flex items-center justify-between text-[9px] pt-0.5 font-mono">
+                <span className="text-zinc-500">Need help?</span>
+                <button
+                  type="button"
+                  onClick={onOpenDiagnostics}
+                  className="text-indigo-500 dark:text-indigo-400 hover:underline font-bold transition select-none cursor-pointer"
+                >
+                  Troubleshoot Sign-In
+                </button>
+              </div>
             </div>
           )}
         </div>
