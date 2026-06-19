@@ -1,6 +1,6 @@
 export interface Block {
   id: string;
-  type: 'paragraph' | 'heading-1' | 'heading-2' | 'heading-3' | 'heading-4' | 'bullet-list-item' | 'numbered-list-item' | 'checklist-item' | 'quote' | 'callout' | 'divider' | 'table' | 'image' | 'code' | 'formula' | 'highlight-box';
+  type: 'paragraph' | 'heading-1' | 'heading-2' | 'heading-3' | 'heading-4' | 'bullet-list-item' | 'numbered-list-item' | 'checklist-item' | 'quote' | 'callout' | 'divider' | 'table' | 'markdown-table' | 'image' | 'code' | 'formula' | 'highlight-box';
   content: string;
   checked?: boolean;
   highlightType?: 'important' | 'very-important' | 'exam-point';
