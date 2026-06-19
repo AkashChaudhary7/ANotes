@@ -1007,7 +1007,7 @@ export default function Editor({
     return (
       <div
         key={block.id}
-        className={`relative group/block flex items-start py-1 select-text transition-all duration-150 ${isReadMode ? 'pl-0' : '-ml-16 pl-16'} ${
+        className={`relative group/block flex items-start py-1 select-text transition-all duration-150 ${isReadMode ? 'pl-0' : 'pl-11 md:pl-16 md:-ml-16'} ${
           draggedIndex === index ? 'opacity-35 bg-indigo-50/10 border-dashed border border-indigo-300 rounded-lg scale-[0.98]' : ''
         } ${
           dragOverIndex === index ? 'border-t-2 border-indigo-500 pt-2.5 bg-indigo-50/30' : ''
@@ -1034,10 +1034,10 @@ export default function Editor({
       >
         {/* Hover drag/menu handles */}
         {!isReadMode && (
-          <div className="absolute left-3 top-2 flex items-center gap-0.5 opacity-0 group-hover/block:opacity-100 transition z-20">
+          <div className="absolute left-1.5 md:left-3 top-2 flex items-center gap-0.5 opacity-100 md:opacity-0 group-hover/block:opacity-100 transition z-20">
             <button
               onClick={() => addBlock('paragraph', block.id)}
-              className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition hidden sm:inline-flex"
               title="Add Block Below"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -2125,9 +2125,17 @@ export default function Editor({
 
       </div>
 
+      {/* Visual backdrop overlay for mobile view when AI side panel is active */}
+      {isAiPanelOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-30 md:hidden transition-opacity duration-350 pointer-events-auto"
+          onClick={() => setIsAiPanelOpen(false)}
+        />
+      )}
+
       {/* AI Note Companion Side Panel overlay / drawer */}
       {isAiPanelOpen && (
-        <div className="w-80 sm:w-96 border-l border-indigo-150 p-5 shrink-0 h-full flex flex-col bg-indigo-50/30 dark:bg-slate-900 shadow-xl relative z-30 select-none animate-slide-in">
+        <div className="fixed inset-y-0 right-0 md:relative md:inset-auto z-40 w-full sm:w-96 border-l border-indigo-150 p-5 shrink-0 h-full flex flex-col bg-white dark:bg-slate-950 md:bg-indigo-50/30 md:dark:bg-slate-900 shadow-2xl md:shadow-none select-none animate-slide-in">
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-indigo-100 dark:border-indigo-950/40 mb-4 shrink-0">
             <div className="flex items-center gap-2">
