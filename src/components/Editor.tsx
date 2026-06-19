@@ -47,6 +47,56 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+interface ParsedMarkdownTable {
+  headers: string[];
+  rows: string[][];
+  alignments: ('left' | 'center' | 'right')[];
+}
+
+export const parseMarkdownTable = (markdown: string): ParsedMarkdownTable | null => {
+  if (!markdown) return null;
+  const lines = markdown.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length === 0) return null;
+
+  const tableLines = lines.filter(l => l.startsWith('|') && l.endsWith('|'));
+  if (tableLines.length < 2) return null;
+
+  const parseRow = (line: string): string[] => {
+    const parts = line.split('|');
+    if (parts.length > 1) {
+      parts.shift();
+      parts.pop();
+    }
+    return parts.map(p => p.trim());
+  };
+
+  const headers = parseRow(tableLines[0]);
+  if (headers.length === 0) return null;
+
+  const delimiterRow = parseRow(tableLines[1]);
+  const isDelimiter = delimiterRow.length > 0 && delimiterRow.every(col => /^[:-]+$/.test(col));
+  if (!isDelimiter) return null;
+
+  const alignments = delimiterRow.map(col => {
+    const left = col.startsWith(':');
+    const right = col.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    return 'left';
+  });
+
+  const rows: string[][] = [];
+  for (let i = 2; i < tableLines.length; i++) {
+    const row = parseRow(tableLines[i]);
+    while (row.length < headers.length) {
+      row.push('');
+    }
+    rows.push(row.slice(0, headers.length));
+  }
+
+  return { headers, rows, alignments };
+};
+
 interface EditorProps {
   note: Note;
   onUpdateNote: (updatedNote: Note) => void;
@@ -101,6 +151,14 @@ export default function Editor({
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
   const [showFloatingTOC, setShowFloatingTOC] = useState(false);
 
+  // Drag and drop block reordering states
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [hoveredHandleBlockId, setHoveredHandleBlockId] = useState<string | null>(null);
+
+  // Markdown-compatible table modes (raw-markdown editor vs interactive table)
+  const [editingMdTableBlockId, setEditingMdTableBlockId] = useState<string | null>(null);
+
   // Synchronization references to auto-save of note upon switching documents
   const lastStateRef = useRef<{ note: Note; isDirty: boolean }>({
     note,
@@ -128,15 +186,7 @@ export default function Editor({
   useEffect(() => {
     if (note.id !== externalNote.id) return;
 
-    const hasChanges = (
-      note.title !== externalNote.title ||
-      note.coverEmoji !== externalNote.coverEmoji ||
-      note.coverImage !== externalNote.coverImage ||
-      JSON.stringify(note.blocks) !== JSON.stringify(externalNote.blocks) ||
-      JSON.stringify(note.tags) !== JSON.stringify(externalNote.tags)
-    );
-
-    if (!hasChanges) {
+    if (note === externalNote) {
       setSyncState('saved');
       return;
     }
@@ -145,7 +195,7 @@ export default function Editor({
     const timer = setTimeout(() => {
       triggerExternalUpdate(note);
       setSyncState('saved');
-    }, 2000);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [note, externalNote, triggerExternalUpdate]);
@@ -370,15 +420,6 @@ export default function Editor({
     });
   };
 
-  // Trigger real-time saving/offline status representation
-  useEffect(() => {
-    setSyncState('saving');
-    const timer = setTimeout(() => {
-      setSyncState('saved');
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [note]);
-
   const blockRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Helper to trigger save/update
@@ -464,6 +505,9 @@ export default function Editor({
             md += `\n`;
           }
           break;
+        case 'markdown-table':
+          md += `${block.content}\n\n`;
+          break;
         default:
           md += `${block.content}\n\n`;
       }
@@ -532,6 +576,11 @@ export default function Editor({
         ['Row 1 Col 1', 'Row 1 Col 2', 'Row 1 Col 3'],
         ['Row 2 Col 1', 'Row 2 Col 2', 'Row 2 Col 3'],
       ];
+    } else if (type === 'markdown-table') {
+      newBlock.content = `| Item | Qty | Price |
+| :--- | :---: | ---: |
+| Notebook | 2 | $4.99 |
+| Pen | 5 | $1.20 |`;
     } else if (type === 'highlight-box') {
       newBlock.highlightType = 'important';
       newBlock.content = 'Write important point here...';
@@ -600,12 +649,29 @@ export default function Editor({
     setActiveBlockMenu(null);
   };
 
+  const handleBlockDrop = (targetIndex: number) => {
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+    const nextBlocks = [...note.blocks];
+    const [removed] = nextBlocks.splice(draggedIndex, 1);
+    nextBlocks.splice(targetIndex, 0, removed);
+
+    onUpdateNote({
+      ...note,
+      blocks: nextBlocks,
+      updatedAt: Date.now()
+    });
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
   const convertBlock = (blockId: string, newType: Block['type']) => {
     const nextBlocks = note.blocks.map(b => {
       if (b.id === blockId) {
         const updated: Block = { ...b, type: newType };
         if (newType === 'table' && !updated.tableData) {
           updated.tableData = [['Cell A', 'Cell B'], ['Cell C', 'Cell D']];
+        } else if (newType === 'markdown-table' && !updated.content) {
+          updated.content = `| Item | Value |\n| :--- | ---: |\n| Sample A | $10 |`;
         } else if (newType === 'highlight-box' && !updated.highlightType) {
           updated.highlightType = 'important';
         } else if (newType === 'code' && !updated.codeLanguage) {
@@ -810,6 +876,7 @@ export default function Editor({
     { type: 'quote', label: 'Quote', desc: 'Quote text highlight layout', icon: <Quote className="h-4 w-4" /> },
     { type: 'callout', label: 'Callout', desc: 'Emoji alert box', icon: <AlertCircle className="h-4 w-4" /> },
     { type: 'table', label: 'Table Grid', desc: 'Custom tabular content', icon: <Grid className="h-4 w-4" /> },
+    { type: 'markdown-table', label: 'Markdown Table', desc: 'GFM Markdown-compatible table', icon: <Grid className="h-4 w-4 text-emerald-500" /> },
     { type: 'formula', label: 'Math Formula', desc: 'Premium style formula equation', icon: <Calculator className="h-4 w-4" /> },
     { type: 'code', label: 'Code Block', desc: 'Monospace code block', icon: <Code className="h-4 w-4" /> },
     { type: 'highlight-box', label: 'Study Point Box', desc: 'Highlight exam-points', icon: <Sparkles className="h-4 w-4 text-amber-500" /> },
@@ -821,7 +888,33 @@ export default function Editor({
     const isMenuOpen = activeBlockMenu === block.id;
 
     return (
-      <div key={block.id} className={`relative group/block flex items-start py-1 select-text ${isReadMode ? 'pl-0' : '-ml-16 pl-16'}`}>
+      <div
+        key={block.id}
+        className={`relative group/block flex items-start py-1 select-text transition-all duration-150 ${isReadMode ? 'pl-0' : '-ml-16 pl-16'} ${
+          draggedIndex === index ? 'opacity-35 bg-indigo-50/10 border-dashed border border-indigo-300 rounded-lg scale-[0.98]' : ''
+        } ${
+          dragOverIndex === index ? 'border-t-2 border-indigo-500 pt-2.5 bg-indigo-50/30' : ''
+        }`}
+        draggable={!isReadMode && hoveredHandleBlockId === block.id}
+        onDragStart={(e) => {
+          setDraggedIndex(index);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (draggedIndex !== null && draggedIndex !== index) {
+            setDragOverIndex(index);
+          }
+        }}
+        onDragEnd={() => {
+          setDraggedIndex(null);
+          setDragOverIndex(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          handleBlockDrop(index);
+        }}
+      >
         {/* Hover drag/menu handles */}
         {!isReadMode && (
           <div className="absolute left-3 top-2 flex items-center gap-1 opacity-0 group-hover/block:opacity-100 transition z-20">
@@ -835,8 +928,10 @@ export default function Editor({
             <div className="relative">
               <button
                 onClick={() => setActiveBlockMenu(isMenuOpen ? null : block.id)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
-                title="Block Options"
+                onMouseEnter={() => setHoveredHandleBlockId(block.id)}
+                onMouseLeave={() => setHoveredHandleBlockId(null)}
+                className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-grab active:cursor-grabbing"
+                title="Drag to reorder / Block Options"
               >
                 <GripVertical className="h-3.5 w-3.5" />
               </button>
@@ -1186,6 +1281,131 @@ export default function Editor({
                     )}
                   </div>
                 );
+              case 'markdown-table':
+                const isEditingMd = editingMdTableBlockId === block.id;
+                const parsedTable = parseMarkdownTable(block.content || '');
+
+                return (
+                  <div key={block.id} className="my-5 w-full border border-gray-200 bg-white rounded-xl shadow-xs overflow-hidden select-text">
+                    {/* Header Controls Bar */}
+                    <div className="bg-slate-50 border-b border-gray-150 px-3.5 py-2 flex items-center justify-between select-none font-sans">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <Grid className="h-4 w-4 text-emerald-600" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                          {isEditingMd ? 'Markdown Table Editor' : 'Markdown Table Preview'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!isReadMode && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingMdTableBlockId(isEditingMd ? null : block.id)}
+                            className={`p-1 px-2.5 text-[10px] font-bold rounded-lg transition active:scale-95 cursor-pointer flex items-center gap-1 border ${
+                              isEditingMd
+                                ? 'bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-500 shadow-sm'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+                            }`}
+                          >
+                            {isEditingMd ? (
+                              <>
+                                <Check className="h-3 w-3" />
+                                <span>Done / Preview</span>
+                              </>
+                            ) : (
+                              <>
+                                <Edit className="h-3 w-3" />
+                                <span>Edit Raw Markdown</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Content Section */}
+                    <div className="p-4 bg-white relative">
+                      {isEditingMd && !isReadMode ? (
+                        <div className="space-y-2.5">
+                          <textarea
+                            value={block.content}
+                            onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                            rows={6}
+                            placeholder="| Column 1 | Column 2 |\n|---|---|\n| Cell A | Cell B |"
+                            className="w-full font-mono text-xs p-3.5 bg-slate-50 text-slate-800 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/20 shadow-inner resize-y leading-relaxed"
+                          />
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-[10px] text-slate-400 font-mono gap-1.5">
+                            <span>Separate headers with pipe '|' and add a delimiter row under headers (e.g. '|---|').</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleBlockChange(block.id, {
+                                  content: `| Item | Qty | Price |\n| :--- | :---: | ---: |\n| Notebook | 2 | $4.99 |\n| Pen | 5 | $1.20 |`
+                                });
+                              }}
+                              className="text-indigo-600 hover:text-indigo-805 hover:underline font-bold transition cursor-pointer"
+                            >
+                              Reset to Template Table
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          {parsedTable ? (
+                            <div className="overflow-x-auto w-full">
+                              <table className="table-auto w-full border-collapse border border-slate-200 rounded-lg text-xs font-sans text-left text-slate-700">
+                                <thead>
+                                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-900 font-bold">
+                                    {parsedTable.headers.map((hdr, hIdx) => (
+                                      <th
+                                        key={hIdx}
+                                        className="p-2.5 border-r border-slate-200 text-slate-800 text-[11px] font-bold uppercase tracking-wider bg-slate-50/80"
+                                        style={{ textAlign: parsedTable.alignments[hIdx] || 'left' }}
+                                      >
+                                        {hdr}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {parsedTable.rows.map((row, rIdx) => (
+                                    <tr
+                                      key={rIdx}
+                                      className={`border-b border-slate-150 transition-colors hover:bg-slate-50/50 ${
+                                        rIdx % 2 === 1 ? 'bg-slate-50/20' : 'bg-white'
+                                      }`}
+                                    >
+                                      {row.map((cell, cIdx) => (
+                                        <td
+                                          key={cIdx}
+                                          className="p-2.5 border-r border-slate-150 text-slate-705 leading-relaxed break-words"
+                                          style={{ textAlign: parsedTable.alignments[cIdx] || 'left' }}
+                                        >
+                                          {cell}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center p-6 bg-rose-50/50 border border-dashed border-rose-200 rounded-xl gap-2 font-sans text-center">
+                              <span className="p-1 rounded-full bg-rose-100 text-rose-600">
+                                <AlertCircle className="h-4 w-4" />
+                              </span>
+                              <div className="space-y-1">
+                                <p className="text-xs font-bold text-rose-800">Invalid Markdown Table formatting</p>
+                                <p className="text-[10px] text-rose-550 leading-relaxed font-mono max-w-md">
+                                  Markdown tables require at least a header row, a delimiter row (e.g. <code className="bg-rose-100/60 px-1 py-0.5 rounded">|---|---|</code>), and aligned columns. Click "Edit Raw Markdown" to correct.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
               case 'highlight-box':
                 const isImportant = block.highlightType === 'important';
                 const isVeryImportant = block.highlightType === 'very-important';
@@ -1488,10 +1708,10 @@ export default function Editor({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.2 }}
-                    className="flex items-center gap-1.5 text-slate-555 absolute inset-0"
+                    className="flex items-center gap-1.5 text-amber-600 font-sans absolute inset-0"
                   >
-                    <RefreshCw className="h-3 w-3 text-amber-500 animate-spin" />
-                    <span>Saving...</span>
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                    <span>Syncing...</span>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -1500,10 +1720,11 @@ export default function Editor({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.3 }}
-                    className="flex items-center gap-1.5 text-slate-450 absolute inset-0"
+                    className="flex items-center gap-1.5 text-emerald-600 font-sans absolute inset-0"
                   >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <Cloud className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>All changes saved</span>
+                    <span>Saved</span>
                   </motion.div>
                 )}
               </AnimatePresence>
