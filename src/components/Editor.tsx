@@ -46,6 +46,7 @@ import {
   Edit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { ContentEditable } from './ContentEditable';
 
 interface ParsedMarkdownTable {
   headers: string[];
@@ -994,69 +995,64 @@ export default function Editor({
             switch (block.type) {
               case 'heading-1':
                 return (
-                  <div
+                  <ContentEditable
                     id={`editable-${block.id}`}
-                    contentEditable={!isReadMode}
-                    suppressContentEditableWarning
+                    disabled={isReadMode}
                     onKeyDown={e => handleKeyDown(e, block)}
                     onInput={e => handleInputText(e, block.id)}
                     className="text-3xl font-sans font-bold tracking-tight text-gray-900 mt-5 mb-2 outline-none w-full"
                     placeholder={isReadMode ? "" : "Heading 1"}
-                    dangerouslySetInnerHTML={{ __html: block.content }}
+                    html={block.content}
                   />
                 );
               case 'heading-2':
                 return (
-                  <div
+                  <ContentEditable
                     id={`editable-${block.id}`}
-                    contentEditable={!isReadMode}
-                    suppressContentEditableWarning
+                    disabled={isReadMode}
                     onKeyDown={e => handleKeyDown(e, block)}
                     onInput={e => handleInputText(e, block.id)}
                     className="text-2xl font-sans font-semibold tracking-tight text-gray-800 mt-4 mb-2 outline-none w-full"
                     placeholder={isReadMode ? "" : "Heading 2"}
-                    dangerouslySetInnerHTML={{ __html: block.content }}
+                    html={block.content}
                   />
                 );
               case 'heading-3':
                 return (
-                  <div
+                  <ContentEditable
                     id={`editable-${block.id}`}
-                    contentEditable={!isReadMode}
-                    suppressContentEditableWarning
+                    disabled={isReadMode}
                     onKeyDown={e => handleKeyDown(e, block)}
                     onInput={e => handleInputText(e, block.id)}
                     className="text-xl font-sans font-semibold tracking-tight text-gray-800 mt-3 mb-2 outline-none w-full"
                     placeholder={isReadMode ? "" : "Heading 3"}
-                    dangerouslySetInnerHTML={{ __html: block.content }}
+                    html={block.content}
                   />
                 );
               case 'heading-4':
                 return (
-                  <div
+                  <ContentEditable
                     id={`editable-${block.id}`}
-                    contentEditable={!isReadMode}
-                    suppressContentEditableWarning
+                    disabled={isReadMode}
                     onKeyDown={e => handleKeyDown(e, block)}
                     onInput={e => handleInputText(e, block.id)}
                     className="text-lg font-sans font-medium tracking-tight text-gray-700 mt-2.5 mb-1.5 outline-none w-full"
                     placeholder={isReadMode ? "" : "Heading 4"}
-                    dangerouslySetInnerHTML={{ __html: block.content }}
+                    html={block.content}
                   />
                 );
               case 'bullet-list-item':
                 return (
                   <div className="flex items-start gap-2.5 my-1 w-full">
                     <span className="text-gray-400 select-none mt-1.5 font-sans font-bold">•</span>
-                    <div
+                    <ContentEditable
                       id={`editable-${block.id}`}
-                      contentEditable={!isReadMode}
-                      suppressContentEditableWarning
+                      disabled={isReadMode}
                       onKeyDown={e => handleKeyDown(e, block)}
                       onInput={e => handleInputText(e, block.id)}
                       className="w-full text-base font-sans text-gray-700 outline-none"
                       placeholder={isReadMode ? "" : "List item"}
-                      dangerouslySetInnerHTML={{ __html: block.content }}
+                      html={block.content}
                     />
                   </div>
                 );
@@ -1066,15 +1062,14 @@ export default function Editor({
                     <span className="text-indigo-500 font-mono text-sm tracking-tighter select-none mt-1 min-w-[15px] text-right">
                       {(note.blocks.slice(0, index).filter(b => b.type === 'numbered-list-item').length + 1)}.
                     </span>
-                    <div
+                    <ContentEditable
                       id={`editable-${block.id}`}
-                      contentEditable={!isReadMode}
-                      suppressContentEditableWarning
+                      disabled={isReadMode}
                       onKeyDown={e => handleKeyDown(e, block)}
                       onInput={e => handleInputText(e, block.id)}
                       className="w-full text-base font-sans text-gray-700 outline-none"
                       placeholder={isReadMode ? "" : "List item"}
-                      dangerouslySetInnerHTML={{ __html: block.content }}
+                      html={block.content}
                     />
                   </div>
                 );
@@ -1088,30 +1083,28 @@ export default function Editor({
                       onChange={e => handleBlockChange(block.id, { checked: e.target.checked })}
                       className="w-4 h-4 rounded border-gray-350 text-indigo-600 focus:ring-indigo-500 mt-1.5 select-none"
                     />
-                    <div
+                    <ContentEditable
                       id={`editable-${block.id}`}
-                      contentEditable={!isReadMode}
-                      suppressContentEditableWarning
+                      disabled={isReadMode}
                       onKeyDown={e => handleKeyDown(e, block)}
                       onInput={e => handleInputText(e, block.id)}
                       className={`w-full text-base font-sans outline-none ${block.checked ? 'line-through text-gray-400' : 'text-gray-700'}`}
                       placeholder={isReadMode ? "" : "To-do point"}
-                      dangerouslySetInnerHTML={{ __html: block.content }}
+                      html={block.content}
                     />
                   </div>
                 );
               case 'quote':
                 return (
                   <div className="pl-4 border-l-4 border-indigo-500 italic my-3.5 text-gray-650 bg-slate-50 py-2.5 rounded-r-lg w-full">
-                    <div
+                    <ContentEditable
                       id={`editable-${block.id}`}
-                      contentEditable={!isReadMode}
-                      suppressContentEditableWarning
+                      disabled={isReadMode}
                       onKeyDown={e => handleKeyDown(e, block)}
                       onInput={e => handleInputText(e, block.id)}
                       className="w-full text-base font-sans outline-none leading-relaxed"
                       placeholder={isReadMode ? "" : "Insert quote representation"}
-                      dangerouslySetInnerHTML={{ __html: block.content }}
+                      html={block.content}
                     />
                   </div>
                 );
@@ -1119,15 +1112,14 @@ export default function Editor({
                 return (
                   <div className="flex items-start gap-3 p-3.5 bg-indigo-50/50 rounded-xl border border-indigo-100 my-4 w-full">
                     <span className="text-xl select-none leading-none">💡</span>
-                    <div
+                    <ContentEditable
                       id={`editable-${block.id}`}
-                      contentEditable={!isReadMode}
-                      suppressContentEditableWarning
+                      disabled={isReadMode}
                       onKeyDown={e => handleKeyDown(e, block)}
                       onInput={e => handleInputText(e, block.id)}
                       className="w-full text-base font-sans text-indigo-950 outline-none"
                       placeholder={isReadMode ? "" : "Callout insights..."}
-                      dangerouslySetInnerHTML={{ __html: block.content }}
+                      html={block.content}
                     />
                   </div>
                 );
@@ -1456,15 +1448,14 @@ export default function Editor({
                         </div>
                       )}
                     </div>
-                    <div
+                    <ContentEditable
                       id={`editable-${block.id}`}
-                      contentEditable={!isReadMode}
-                      suppressContentEditableWarning
+                      disabled={isReadMode}
                       onKeyDown={e => handleKeyDown(e, block)}
                       onInput={e => handleInputText(e, block.id)}
                       className="w-full text-base font-sans outline-none font-medium leading-relaxed"
                       placeholder={isReadMode ? "" : "Write core study point..."}
-                      dangerouslySetInnerHTML={{ __html: block.content }}
+                      html={block.content}
                     />
                   </div>
                 );
@@ -1593,15 +1584,14 @@ export default function Editor({
               case 'paragraph':
               default:
                 return (
-                  <div
+                  <ContentEditable
                     id={`editable-${block.id}`}
-                    contentEditable={!isReadMode}
-                    suppressContentEditableWarning
+                    disabled={isReadMode}
                     onKeyDown={e => handleKeyDown(e, block)}
                     onInput={e => handleInputText(e, block.id)}
                     className="w-full text-base font-sans text-gray-700 outline-none leading-relaxed min-h-[24px]"
                     placeholder={isReadMode ? "" : "Type '/' for headings, templates, tables, formulas..."}
-                    dangerouslySetInnerHTML={{ __html: block.content }}
+                    html={block.content}
                   />
                 );
             }
