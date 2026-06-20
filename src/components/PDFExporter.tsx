@@ -183,7 +183,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
   return (
     <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-end z-50 select-text anotes-pdf-modal">
       {/* Exporter sidebar side panel */}
-      <div className="w-[450px] h-full bg-white border-l border-slate-200 flex flex-col shadow-2xl z-20">
+      <div className="w-full sm:w-[450px] h-full bg-white border-l border-slate-200 flex flex-col shadow-2xl z-20">
         {/* Header */}
         <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-950 text-white select-none">
           <div className="flex items-center gap-2">
@@ -431,7 +431,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
       </div>
 
       {/* Main Preview Page Template */}
-      <div className="flex-1 h-full bg-slate-800 p-10 overflow-y-auto flex justify-center print:bg-white print:p-0 select-text relative">
+      <div className="hidden lg:flex flex-1 h-full bg-slate-800 p-10 overflow-y-auto justify-center print:bg-white print:p-0 select-text relative">
         <div
           id="anotes-print-target"
           className="w-[794px] min-h-[1123px] bg-white shadow-2xl p-16 relative overflow-hidden select-text flex flex-col font-serif print:shadow-none print:w-full print:p-8"
