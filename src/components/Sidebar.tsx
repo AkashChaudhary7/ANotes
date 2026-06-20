@@ -49,8 +49,6 @@ interface SidebarProps {
   onToggleDark: () => void;
   user: any; // Firebase user authentication
   isSyncing: boolean;
-  onLogin: () => void;
-  onLogout: () => void;
   isQuizActive: boolean;
   onOpenQuizZone: () => void;
   onOpenDiagnostics?: () => void;
@@ -79,8 +77,6 @@ export default function Sidebar({
   onToggleDark,
   user,
   isSyncing,
-  onLogin,
-  onLogout,
   isQuizActive,
   onOpenQuizZone,
   onOpenDiagnostics
@@ -206,81 +202,46 @@ export default function Sidebar({
         </div>
 
         {/* Minimal Cloud Sync Dashboard Card */}
-        <div className={`p-3 rounded-xl border text-xs transition ${
+        <div className={`p-3.5 rounded-xl border text-xs transition ${
           isDark 
             ? 'bg-zinc-900/40 border-zinc-900 text-zinc-200' 
-            : 'bg-white border-zinc-200/50 text-zinc-800 shadow-[0_1px_2px_rgba(0,0,0,0.01)]'
+            : 'bg-zinc-50 border-zinc-200/50 text-zinc-800'
         }`}>
-          {user ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="" className="w-6 h-6 rounded-md pointer-events-none" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-6 h-6 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-200 font-bold text-[10px] font-mono text-center">
-                    {user.displayName?.[0] || user.email?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <h4 className={`font-semibold truncate text-[10px] leading-tight ${isDark ? 'text-zinc-250' : 'text-zinc-900'}`}>
-                    {user.displayName || 'Authorized User'}
-                  </h4>
-                  <p className="text-[9px] text-zinc-400 truncate leading-none">{user.email}</p>
-                </div>
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                <Cloud className={`h-4 w-4 ${isSyncing ? 'animate-pulse' : ''}`} />
               </div>
-              <div className="flex items-center justify-between text-[9px] pt-1.5 border-t border-zinc-100 dark:border-zinc-850">
-                <span className="flex items-center gap-1 text-emerald-500 font-semibold uppercase tracking-wider text-[8px]">
-                  <Cloud className="h-3 w-3" />
-                  <span>Cloud Synced</span>
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={onOpenDiagnostics}
-                    className="text-indigo-400 hover:text-indigo-300 hover:underline transition text-[9px] select-none cursor-pointer"
-                  >
-                    Logs
-                  </button>
-                  <span className="text-zinc-700 dark:text-zinc-800">|</span>
-                  <button 
-                    onClick={onLogout}
-                    className="text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200 transition text-[9px] select-none cursor-pointer underline"
-                  >
-                    Sign Out
-                  </button>
-                </div>
+              <div className="flex-1 min-w-0">
+                <h4 className={`font-semibold text-[11px] leading-tight flex items-center gap-1.5 ${isDark ? 'text-zinc-200' : 'text-zinc-900'}`}>
+                  <span>Firestore Cloud Backup</span>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                </h4>
+                <p className="text-[9px] text-zinc-400 truncate mt-0.5 font-mono">
+                  {user ? `Private Node ID: ${user.uid.substring(0, 8)}` : 'Initializing backup token...'}
+                </p>
               </div>
             </div>
-          ) : (
-            <div className="space-y-2 py-0.5">
-              <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-widest font-semibold">
-                <CloudOff className="h-3 w-3 text-zinc-400" />
-                <span>Cloud Sync Offline</span>
-              </div>
-              <p className="text-[10px] text-zinc-400 leading-normal">
-                Sign in to automatically sync and backup your assignments securely on Firestore database.
-              </p>
-              <button
-                onClick={onLogin}
-                className={`w-full py-1.5 px-3 rounded-lg font-semibold text-[10px] flex items-center justify-center gap-1.5 transition active:scale-[0.98] cursor-pointer border ${
-                  isDark
-                    ? 'bg-zinc-900 border-zinc-850 hover:bg-zinc-800 text-zinc-100'
-                    : 'bg-zinc-100 border-zinc-200 hover:bg-zinc-200 text-zinc-800'
-                }`}
-              >
-                <span>Google Account</span>
-              </button>
-              <div className="flex items-center justify-between text-[9px] pt-0.5 font-mono">
-                <span className="text-zinc-500">Need help?</span>
+
+            <p className="text-[10px] text-zinc-400 leading-normal font-sans">
+              Every folder and assignment note is auto-saved in the background to the persistent Firestore database. Zero configuration or logins required.
+            </p>
+
+            <div className="flex items-center justify-between text-[9px] pt-2 border-t border-zinc-100 dark:border-zinc-850 font-sans">
+              <span className="text-emerald-500 font-bold uppercase tracking-wider text-[8px] flex items-center gap-1">
+                {isSyncing ? 'Syncing cache...' : 'Autosaved'}
+              </span>
+              {onOpenDiagnostics && (
                 <button
                   type="button"
                   onClick={onOpenDiagnostics}
-                  className="text-indigo-500 dark:text-indigo-400 hover:underline font-bold transition select-none cursor-pointer"
+                  className="text-indigo-500 hover:text-indigo-600 dark:text-indigo-400 dark:hover:text-indigo-300 font-bold transition select-none cursor-pointer hover:underline"
                 >
-                  Troubleshoot Sign-In
+                  View Sync Logs
                 </button>
-              </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
