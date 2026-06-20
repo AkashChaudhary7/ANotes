@@ -8,17 +8,17 @@ import DiagnosticPanel, { DiagnosticLog } from './components/DiagnosticPanel';
 import { Folder, Note } from './types';
 import { getFolders, getNotes, saveFolder, deleteFolder, saveNote, deleteNote, seedInitialDataIfNeeded } from './utils/db';
 import { Sparkles, Info, Menu, Plus, HelpCircle } from 'lucide-react';
-import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   auth,
-  loginWithGoogle,
+  loginAnonymously,
   logoutUser,
   getFoldersFromFirestore,
   getNotesFromFirestore,
   saveFolderToFirestore,
   saveNoteToFirestore,
   deleteFolderFromFirestore,
-  deleteNoteFromFirestore
+  deleteNoteFromFirestore,
+  onAuthStateChanged
 } from './utils/firebase';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -29,7 +29,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
 
   // Authentication & cloud syncing states (Minimalist study desk)
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLocalDbLoaded, setIsLocalDbLoaded] = useState(false);
 
@@ -42,7 +42,6 @@ export default function App() {
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [showMindModal, setShowMindModal] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
 
   // Diagnostics logging panel states
   const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
@@ -159,7 +158,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        addDiagnosticLog('success', `Auth session active: User signed in successfully. Email: ${firebaseUser.email}, UID: ${firebaseUser.uid}`);
+        addDiagnosticLog('success', `Cloud Backup active. Session UID: ${firebaseUser.uid}`);
         setIsSyncing(true);
         try {
           // Fetch Cloud Firestore states
@@ -167,7 +166,7 @@ export default function App() {
           const cloudNotes = await getNotesFromFirestore(firebaseUser.uid);
 
           if (cloudFolders.length === 0 && cloudNotes.length === 0) {
-            addDiagnosticLog('info', 'Cloud Sync: No remote documents found. Initializing remote database with local items...');
+            addDiagnosticLog('info', 'Cloud Sync: Connecting remote database to local client...');
             // First time pairing: sync current local items to Firestore
             const localFolders = await getFolders();
             const localNotes = await getNotes();
@@ -177,9 +176,9 @@ export default function App() {
             for (const n of localNotes) {
               await saveNoteToFirestore(n, firebaseUser.uid);
             }
-            addDiagnosticLog('success', 'Cloud Sync: Remote database successfully pre-seeded with local records!');
+            addDiagnosticLog('success', 'Cloud Sync: Successfully backed up existing items in Cloud!');
           } else {
-            addDiagnosticLog('info', `Cloud Sync: Syncing ${cloudFolders.length} folders and ${cloudNotes.length} notes down to local cache...`);
+            addDiagnosticLog('info', `Cloud Sync: Downloading ${cloudFolders.length} folders and ${cloudNotes.length} notes...`);
             // Synchronize from Cloud Firestore down to IndexedDB cache
             for (const f of cloudFolders) {
               await saveFolder(f);
@@ -212,7 +211,7 @@ export default function App() {
                 setActiveNoteId(activeOnes.length > 0 ? activeOnes[0].id : cloudNotes[0].id);
               }
             }
-            addDiagnosticLog('success', 'Cloud Sync: Local Cache successfully synchronized with remote Firestore!');
+            addDiagnosticLog('success', 'Cloud Sync: Synchronized!');
           }
         } catch (err: any) {
           console.error('Error synchronizing with Firestore database:', err);
@@ -221,7 +220,7 @@ export default function App() {
           setIsSyncing(false);
         }
       } else {
-        addDiagnosticLog('info', 'Auth session inactive: Operating in localized offline-only mode.');
+        addDiagnosticLog('info', 'Firestore Backup: Operating in localized cache fallback mode.');
         // Logged-out state: fallback down to IndexedDB
         const localFolders = await getFolders();
         const localNotes = await getNotes();
@@ -413,31 +412,6 @@ export default function App() {
     setNotes(prev => prev.map(n => n.id === noteId ? updated : n));
   };
 
-  // Google Sign-In Actions
-  const handleLogin = async () => {
-    setLoginError(null);
-    addDiagnosticLog('info', 'Auth action: User requested Google Sign-in flow. Constructing popup state...');
-    try {
-      const loggedUser = await loginWithGoogle();
-      addDiagnosticLog('success', `Auth action success: User logged in. Profile name: ${loggedUser.displayName || 'Authorized User'}`);
-    } catch (e: any) {
-      console.error('Google authorization error:', e);
-      setLoginError(e?.message || String(e));
-      addDiagnosticLog('error', `Google Login handshakes failed. Code reason: ${e?.message || String(e)}`, e?.code);
-    }
-  };
-
-  const handleLogout = async () => {
-    addDiagnosticLog('info', 'Auth action: Terminating user session flow...');
-    try {
-      await logoutUser();
-      addDiagnosticLog('success', 'Auth action success: Local authorization session cleared successfully.');
-    } catch (e: any) {
-      console.error('Logout error:', e);
-      addDiagnosticLog('error', `Logout termination failed: ${e?.message || String(e)}`, e?.code);
-    }
-  };
-
   // PWA Prompt Installation trigger button actions
   const handleTriggerPWAInstall = () => {
     if (!deferredPrompt) return;
@@ -488,8 +462,6 @@ export default function App() {
         onToggleDark={() => setIsDark(!isDark)}
         user={user}
         isSyncing={isSyncing}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
         isQuizActive={showQuiz}
         onOpenQuizZone={() => {
           setShowQuiz(true);
@@ -585,44 +557,6 @@ export default function App() {
           note={activeNote}
           onClose={() => setShowMindModal(false)}
         />
-      )}
-
-      {/* GOOGLE SIGN-IN INTERACTIVE TROUBLESHOOTING GUIDE */}
-      {loginError && (
-        <div className={`fixed bottom-6 right-6 left-6 md:left-auto md:w-[420px] rounded-2xl shadow-2xl p-5 z-50 text-xs leading-relaxed font-sans space-y-3 animate-fade-in border ${
-          isDark ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-rose-200 text-slate-800'
-        }`}>
-          <div className="flex items-start justify-between">
-            <div className={`flex items-center gap-2 font-bold select-none text-sm ${isDark ? 'text-rose-400' : 'text-rose-600'}`}>
-              <Info className="h-4 w-4 animate-pulse" />
-              <span>Google Sign-In Alert</span>
-            </div>
-            <button
-              onClick={() => setLoginError(null)}
-              className={`p-1.5 rounded transition cursor-pointer select-none text-[10px] font-bold uppercase tracking-wider ${
-                isDark ? 'hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-650'
-              }`}
-            >
-              Dismiss
-            </button>
-          </div>
-          <p>
-            The sign-in popup was blocked or failed to communicate. Because this preview runs inside a secure sandbox **iframe**, modern browsers (like Safari, Brave, or Chrome incognito mode) restrict third-party authentication popups from communicating back by default.
-          </p>
-          <div className={`rounded-xl p-3 border space-y-1.5 font-mono text-[10px] ${
-            isDark ? 'bg-zinc-950/60 border-zinc-850 text-zinc-400' : 'bg-rose-50/50 border-rose-100/50 text-slate-600'
-          }`}>
-            <p className={`font-bold uppercase text-[9px] tracking-wider ${isDark ? 'text-zinc-300' : 'text-rose-700'}`}>Recommended Actions:</p>
-            <p>• Click the "Open in new tab" arrow icon in the outer top-right of your preview header to launch the application outside the frame.</p>
-            <p>• Ensure third-party cookies & redirects are allowed, or verify that your Google API Authorized domains include this preview host.</p>
-          </div>
-          <button
-            onClick={() => setShowDiagnosticPanel(true)}
-            className="w-full mt-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/20 rounded-lg py-1.5 transition uppercase tracking-wider"
-          >
-            Check Security & Auth Diagnostics
-          </button>
-        </div>
       )}
 
       {/* DETAILED DIAGNOSTICS & SYSTEM EVENT CHRONOLOGY PANEL */}
