@@ -1,13 +1,27 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
 import { getFirestore, doc, setDoc, deleteDoc, getDocs, collection, query, where, getDocFromServer } from 'firebase/firestore';
 import { Folder, Note } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+
+export function getLocalClientId(): string {
+  let id = localStorage.getItem('anotes-local-client-id');
+  if (!id) {
+    id = 'node_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+    localStorage.setItem('anotes-local-client-id', id);
+  }
+  return id;
+}
+
+export const auth = {
+  currentUser: {
+    uid: getLocalClientId(),
+    displayName: 'Local Device Client',
+    email: 'local@device.backup'
+  }
+};
 
 async function testConnection() {
   try {
@@ -36,13 +50,6 @@ export interface FirestoreErrorInfo {
   authInfo: {
     userId?: string | null;
     email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
   }
 }
 
@@ -51,14 +58,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
+      email: auth.currentUser?.email
     },
     operationType,
     path
@@ -67,23 +67,19 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-export async function loginWithGoogle(): Promise<User> {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
-  } catch (error) {
-    console.error('Google Sign-In Error:', error);
-    throw error;
-  }
+export async function loginAnonymously(): Promise<any> {
+  return { user: auth.currentUser };
 }
 
 export async function logoutUser(): Promise<void> {
-  try {
-    await signOut(auth);
-  } catch (error) {
-    console.error('Logout error:', error);
-    throw error;
-  }
+  // Safe no-op as auth handles automatic silent sync
+}
+
+export function onAuthStateChanged(_auth: any, callback: (user: any) => void) {
+  const timer = setTimeout(() => {
+    callback(auth.currentUser);
+  }, 100);
+  return () => clearTimeout(timer);
 }
 
 // Sync utilities
@@ -100,7 +96,7 @@ export async function saveFolderToFirestore(folder: Folder, userId: string): Pro
   }
 }
 
-export async function deleteFolderFromFirestore(folderId: string, userId: string): Promise<void> {
+export async function deleteFolderFromFirestore(folderId: string, _userId: string): Promise<void> {
   const path = `folders/${folderId}`;
   try {
     await deleteDoc(doc(db, 'folders', folderId));
@@ -112,9 +108,20 @@ export async function deleteFolderFromFirestore(folderId: string, userId: string
 export async function saveNoteToFirestore(note: Note, userId: string): Promise<void> {
   const path = `notes/${note.id}`;
   try {
+    const processedBlocks = note.blocks.map(b => {
+      if (b.tableData) {
+        return {
+          ...b,
+          tableData: JSON.stringify(b.tableData) as any
+        };
+      }
+      return b;
+    });
+
     const noteDoc = {
       ...note,
       userId,
+      blocks: processedBlocks,
       // Default folderId to null if undefined, to prevent undefined fields in Firestore payloads
       folderId: note.folderId ?? null
     };
@@ -124,7 +131,7 @@ export async function saveNoteToFirestore(note: Note, userId: string): Promise<v
   }
 }
 
-export async function deleteNoteFromFirestore(noteId: string, userId: string): Promise<void> {
+export async function deleteNoteFromFirestore(noteId: string, _userId: string): Promise<void> {
   const path = `notes/${noteId}`;
   try {
     await deleteDoc(doc(db, 'notes', noteId));
@@ -163,11 +170,25 @@ export async function getNotesFromFirestore(userId: string): Promise<Note[]> {
     const notes: Note[] = [];
     snapshot.forEach(docSnap => {
       const data = docSnap.data();
+      const processedBlocks = (data.blocks || []).map((b: any) => {
+        if (b.tableData && typeof b.tableData === 'string') {
+          try {
+            return {
+              ...b,
+              tableData: JSON.parse(b.tableData)
+            };
+          } catch (e) {
+            console.error('Failed to parse tableData string: ', e);
+          }
+        }
+        return b;
+      });
+
       notes.push({
         id: data.id,
         folderId: data.folderId,
         title: data.title,
-        blocks: data.blocks || [],
+        blocks: processedBlocks,
         coverEmoji: data.coverEmoji,
         coverImage: data.coverImage || null,
         createdAt: data.createdAt,
