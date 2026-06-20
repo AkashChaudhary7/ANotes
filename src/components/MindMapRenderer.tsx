@@ -104,8 +104,8 @@ export default function MindMapRenderer({ note, onClose }: MindMapRendererProps)
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-6 z-50 select-none">
-      <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden text-slate-200">
+    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-50 select-none">
+      <div className="bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-5xl h-[92vh] sm:h-[85vh] flex flex-col shadow-2xl overflow-hidden text-slate-200">
         
         {/* Header bar */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
@@ -164,11 +164,11 @@ export default function MindMapRenderer({ note, onClose }: MindMapRendererProps)
             {/* Layout structures */}
             {layoutStyle === 'split' ? (
               // Split visual tree branches
-              <div className="grid grid-cols-3 gap-6 w-full items-start px-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full items-start px-4">
                 {mapData.children.slice(0, 3).map((branch, bIdx) => (
                   <div key={branch.id} className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4.5 space-y-3 shadow shadow-slate-900 relative">
                     {/* Connective branch link indicator */}
-                    <div className="absolute -top-6 left-1/2 w-0.5 h-6 bg-indigo-500/25"></div>
+                    <div className="absolute -top-6 left-1/2 w-0.5 h-6 bg-indigo-500/25 hidden md:block"></div>
                     
                     <h3 className="text-sm font-bold text-center text-indigo-300 pb-2 border-b border-slate-800 tracking-wide uppercase">
                       {branch.label}
@@ -191,7 +191,7 @@ export default function MindMapRenderer({ note, onClose }: MindMapRendererProps)
               </div>
             ) : (
               // Bento board representations
-              <div className="grid grid-cols-2 gap-4 w-full px-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full px-4 md:px-6">
                 {mapData.children.slice(0, 4).map((branch) => (
                   <div key={branch.id} className="bg-slate-900 p-5 rounded-2xl border border-indigo-550/15 text-left shadow-lg scale-99 hover:scale-100 transition-all">
                     <div className="flex items-center gap-1.5 font-bold text-indigo-400 text-xs uppercase tracking-widest pb-3 border-b border-slate-800">
