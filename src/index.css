@@ -26,12 +26,13 @@
     margin: 1.5cm;
   }
   
-  html, body, #anotes-app-root {
+  html, body, #root, #anotes-app-root {
     height: auto !important;
     min-height: auto !important;
     overflow: visible !important;
     position: static !important;
     width: auto !important;
+    display: block !important;
   }
 
   body {
@@ -54,11 +55,27 @@
     margin: 0 !important;
     box-shadow: none !important;
     display: block !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
   }
   
   /* Hide the modal's left configuration panel */
   .anotes-pdf-modal > div:first-child {
     display: none !important;
+  }
+
+  /* Force display of the preview paper template */
+  .anotes-pdf-modal > div:last-child {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
   }
   
   /* Hide buttons, forms, selects, and textareas */
@@ -76,6 +93,9 @@
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
   }
   
   .page-break-after-always {
