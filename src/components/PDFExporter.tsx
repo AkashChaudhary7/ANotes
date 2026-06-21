@@ -431,7 +431,7 @@ export default function PDFExporter({ note, onClose }: PDFExporterProps) {
       </div>
 
       {/* Main Preview Page Template */}
-      <div className="hidden lg:flex flex-1 h-full bg-slate-800 p-10 overflow-y-auto justify-center print:bg-white print:p-0 select-text relative">
+      <div className="hidden lg:flex print:flex flex-1 h-full bg-slate-800 p-10 overflow-y-auto justify-center print:bg-white print:p-0 select-text relative">
         <div
           id="anotes-print-target"
           className="w-[794px] min-h-[1123px] bg-white shadow-2xl p-16 relative overflow-hidden select-text flex flex-col font-serif print:shadow-none print:w-full print:p-8"
