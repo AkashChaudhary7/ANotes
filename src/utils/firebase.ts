@@ -83,13 +83,33 @@ export function onAuthStateChanged(_auth: any, callback: (user: any) => void) {
 }
 
 // Sync utilities
+function cleanUndefined(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return null;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefined(item));
+  }
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        cleaned[key] = cleanUndefined(val);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 export async function saveFolderToFirestore(folder: Folder, userId: string): Promise<void> {
   const path = `folders/${folder.id}`;
   try {
-    const folderDoc = {
+    const folderDoc = cleanUndefined({
       ...folder,
       userId
-    };
+    });
     await setDoc(doc(db, 'folders', folder.id), folderDoc);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -118,13 +138,13 @@ export async function saveNoteToFirestore(note: Note, userId: string): Promise<v
       return b;
     });
 
-    const noteDoc = {
+    const noteDoc = cleanUndefined({
       ...note,
       userId,
       blocks: processedBlocks,
       // Default folderId to null if undefined, to prevent undefined fields in Firestore payloads
       folderId: note.folderId ?? null
-    };
+    });
     await setDoc(doc(db, 'notes', note.id), noteDoc);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
